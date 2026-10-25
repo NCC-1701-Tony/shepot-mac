@@ -17,7 +17,7 @@ final class HotKey {
 
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
-    private static let signature: OSType = 0x4449_4354 // 'DICT'
+    private static let signature: OSType = 0x5348_5054 // 'SHPT'
 
     init() {
         var events = [

@@ -11,6 +11,7 @@ struct IslandControls: View {
     @ObservedObject var model: OverlayModel
     let opensUp: Bool // bottom island: dropdown above the chips; notch island: below
     @EnvironmentObject private var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 8) {
@@ -18,7 +19,7 @@ struct IslandControls: View {
             chips
             if !opensUp { dropdown }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: model.openMenu)
+        .animation(.ui(.spring(response: 0.3, dampingFraction: 0.85), reduceMotion: reduceMotion), value: model.openMenu)
     }
 
     // MARK: Chips
@@ -33,25 +34,36 @@ struct IslandControls: View {
 
     private func chip(_ menu: OverlayModel.Menu, title: String?) -> some View {
         let isOpen = model.openMenu == menu
-        return HStack(spacing: 6) {
-            if let title {
-                Text(title).font(.system(size: 13, weight: .semibold))
-                Image(systemName: opensUp ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .opacity(0.7)
-                    .rotationEffect(.degrees(isOpen ? 180 : 0))
-            } else {
-                Image(systemName: "clock.arrow.circlepath").font(.system(size: 13, weight: .semibold))
+        return Button { model.openMenu = isOpen ? nil : menu } label: {
+            HStack(spacing: 6) {
+                if let title {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Image(systemName: isOpen == opensUp ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 9, weight: .bold))
+                        .opacity(0.7)
+                } else {
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 13, weight: .semibold))
+                }
             }
+            .foregroundStyle(Theme.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(Capsule().fill(Theme.surface))
+            .overlay(Capsule().strokeBorder(isOpen ? Theme.accent : Theme.stroke, lineWidth: isOpen ? 1.5 : 1))
+            .contentShape(Capsule())
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .frame(height: 30)
-        .background(Capsule().fill(.black))
-        .overlay(Capsule().strokeBorder(isOpen ? Theme.coral : .white.opacity(0.1), lineWidth: isOpen ? 1.5 : 1))
-        .contentShape(Capsule())
+        .buttonStyle(PressScaleStyle())
         .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-        .onTapGesture { model.openMenu = isOpen ? nil : menu }
+        .accessibilityLabel(accessibilityTitle(menu, title: title))
+        .accessibilityValue(isOpen ? "открыто" : "")
+    }
+
+    private func accessibilityTitle(_ menu: OverlayModel.Menu, title: String?) -> String {
+        switch menu {
+        case .model: "Модель: \(title ?? "")"
+        case .language: "Язык: \(title ?? "")"
+        case .history: "История диктовок"
+        }
     }
 
     // MARK: Dropdown
@@ -60,7 +72,8 @@ struct IslandControls: View {
     private var dropdown: some View {
         if let menu = model.openMenu {
             Dropdown(entries: entries(for: menu)) { model.openMenu = nil }
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: opensUp ? .bottom : .top)))
+                .transition(.ui(.opacity.combined(with: .scale(scale: 0.96, anchor: opensUp ? .bottom : .top)),
+                                reduceMotion: reduceMotion))
         }
     }
 
@@ -111,14 +124,15 @@ private struct Dropdown: View {
     var body: some View {
         Group {
             if entries.count > 10 {
-                ScrollView { rows }.scrollIndicators(.never).frame(height: Self.maxHeight)
+                ScrollView { rows }.frame(height: Self.maxHeight)
             } else {
                 rows
             }
         }
         .frame(width: 320)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.black))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.1)))
+        // 16 = row radius 9 + padding 6 + border 1, so the corners stay concentric.
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.stroke))
         .shadow(color: .black.opacity(0.35), radius: 14, y: 4)
     }
 
@@ -127,15 +141,17 @@ private struct Dropdown: View {
             ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
                 switch entry {
                 case .header(let title):
-                    Text(title.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.5)
-                        .foregroundStyle(Theme.secondaryText)
+                    Text(title)
+                        .textCase(.uppercase)
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.55)
+                        .foregroundStyle(Theme.textSecondary)
+                        .accessibilityAddTraits(.isHeader)
                         .padding(.horizontal, 10)
                         .padding(.top, 6)
                         .padding(.bottom, 3)
                 case .separator:
-                    Rectangle().fill(.white.opacity(0.08)).frame(height: 1).padding(.vertical, 4)
+                    Rectangle().fill(Theme.stroke).frame(height: 1).padding(.vertical, 4)
                 case let .item(title, checked, enabled, action):
                     DropdownRow(title: title, checked: checked, enabled: enabled) {
                         close()
@@ -156,28 +172,33 @@ private struct DropdownRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.system(size: 13, weight: checked ? .semibold : .regular))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 4)
-            if checked {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Theme.coral)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 13, weight: checked ? .semibold : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                if checked {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                }
             }
+            .foregroundStyle(Theme.textPrimary)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isHovering && enabled ? Theme.fillSelected : .clear)
+            )
+            .contentShape(Rectangle())
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(isHovering && enabled ? .white.opacity(0.1) : .clear)
-        )
+        .buttonStyle(.plain)
+        .disabled(!enabled)
         .opacity(enabled ? 1 : 0.4)
-        .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .onTapGesture { if enabled { action() } }
+        .help(title) // full text when the row is truncated
+        .accessibilityAddTraits(checked ? .isSelected : [])
     }
 }

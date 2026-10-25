@@ -24,15 +24,15 @@ enum ModelCatalog {
     static let defaultModel = all[0]
 }
 
-/// Models on disk: ~/Library/Application Support/Dictate/Models
+/// Models on disk: ~/Library/Application Support/Shepot/Models
 enum ModelStore {
     static let repo = "argmaxinc/whisperkit-coreml"
     static let baseURL = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appending(path: "Dictate/Models", directoryHint: .isDirectory)
+        .appending(path: "Shepot/Models", directoryHint: .isDirectory)
 
     /// Written after model + tokenizer are fully downloaded.
-    private static let completeMarker = ".dictate-complete"
+    private static let completeMarker = ".shpt-complete"
 
     static func folder(for id: String) -> URL {
         HubApiWrapper(downloadBase: baseURL)

@@ -153,6 +153,7 @@ final class OverlayController {
 struct OverlayView: View {
     @ObservedObject var meter: LevelMeter
     @ObservedObject var model: OverlayModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let islandWidth: CGFloat = 380
     static let islandHeight: CGFloat = 56
@@ -176,26 +177,30 @@ struct OverlayView: View {
     private var bottomIsland: some View {
         content
             .frame(width: Self.islandWidth, height: Self.islandHeight)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.black))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.surface))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.stroke))
             .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
-            .scaleEffect(model.expanded ? 1 : 0.92)
-            .offset(y: model.expanded ? 0 : 14)
+            // Under "Reduce motion" the island only fades.
+            .scaleEffect(model.expanded || reduceMotion ? 1 : 0.92)
+            .offset(y: model.expanded || reduceMotion ? 0 : 14)
             .opacity(model.expanded ? 1 : 0)
             .padding(.bottom, 12)
     }
 
     private var notchIsland: some View {
-        let width = model.expanded ? Self.islandWidth : model.notch.width
-        let height = model.notch.height + (model.expanded ? Self.islandHeight : 0)
+        // Under "Reduce motion" it doesn't grow out of the notch, it fades in at full size.
+        let open = model.expanded || reduceMotion
+        let width = open ? Self.islandWidth : model.notch.width
+        let height = model.notch.height + (open ? Self.islandHeight : 0)
         return VStack(spacing: 0) {
             Color.clear.frame(height: model.notch.height) // the notch itself
             content.frame(height: Self.islandHeight).opacity(model.expanded ? 1 : 0)
         }
         .frame(width: width, height: height, alignment: .top)
         .clipped()
-        .background(NotchShape(radius: 22).fill(.black))
+        .background(NotchShape(radius: 22).fill(Theme.surface))
         .shadow(color: .black.opacity(model.expanded ? 0.35 : 0), radius: 12, y: 4)
+        .opacity(reduceMotion && !model.expanded ? 0 : 1)
     }
 
     // MARK: Content
@@ -206,7 +211,7 @@ struct OverlayView: View {
             bars.frame(width: 110, height: 28)
             HStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Theme.coral)
+                    .fill(Theme.accent)
                     .frame(width: 28, height: 28)
                     .overlay(
                         Image(systemName: "waveform")
@@ -214,9 +219,9 @@ struct OverlayView: View {
                             .foregroundStyle(.white)
                     )
                 Spacer()
-                Text(model.mode == .transcribing ? "Распознаю…" : "Dictate")
+                Text(model.mode == .transcribing ? "Распознаю…" : "Shepot")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.textPrimary)
             }
             .padding(.horizontal, 18)
         }
@@ -232,6 +237,13 @@ struct OverlayView: View {
                 }
             }
             .animation(.easeOut(duration: 0.12), value: meter.levels)
+        case .transcribing where reduceMotion:
+            // No moving wave; the "Распознаю…" label carries the state.
+            HStack(spacing: 5) {
+                ForEach(0..<LevelMeter.barCount, id: \.self) { _ in
+                    Capsule().fill(.white.opacity(0.6)).frame(width: 5, height: 10)
+                }
+            }
         case .transcribing:
             // Calm wave while the model works.
             TimelineView(.animation) { context in

@@ -47,6 +47,7 @@ private struct OnboardingView: View {
     let close: () -> Void
     @EnvironmentObject private var state: AppState
     @State private var step = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let stepCount = 5
     // Live permission status while the user flips switches in System Settings.
@@ -67,8 +68,9 @@ private struct OnboardingView: View {
             .padding(.horizontal, 36)
             .padding(.top, 48)
             .id(step)
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)))
+            .transition(.ui(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
+                                        removal: .move(edge: .leading).combined(with: .opacity)),
+                            reduceMotion: reduceMotion))
 
             footer
         }
@@ -86,11 +88,11 @@ private struct OnboardingView: View {
                 .resizable()
                 .frame(width: 112, height: 112)
                 .padding(.top, 30)
-            Text("Dictate").font(.system(size: 30, weight: .bold))
+            Text("Shepot").font(.system(size: 30, weight: .bold))
             Text("Говорите — текст появится там, где стоит курсор. В любом приложении.")
                 .font(.system(size: 15))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.textSecondary)
             VStack(alignment: .leading, spacing: 12) {
                 feature("lock.fill", "Всё работает на этом Mac, без интернета и подписок")
                 feature("waveform", "Распознавание Whisper от OpenAI, хорошо понимает русский")
@@ -105,17 +107,17 @@ private struct OnboardingView: View {
         return stepLayout(
             icon: "mic.fill",
             title: "Доступ к микрофону",
-            text: "Dictate слушает микрофон только пока вы держите клавишу, и распознаёт речь прямо на этом Mac."
+            text: "Shepot слушает микрофон только пока вы держите клавишу, и распознаёт речь прямо на этом Mac."
         ) {
             if allowed {
                 done("Микрофон разрешён")
             } else if state.isMicrophoneAllowed {
-                PillButton(title: "Разрешить микрофон", prominent: true) {
+                PillButton(title: "Разрешить микрофон", kind: .primary) {
                     Task { _ = await Permissions.requestMicrophone(); state.refreshPermissions() }
                 }
             } else {
-                hint("Доступ был запрещён. Включите Dictate в разделе «Микрофон».")
-                PillButton(title: "Открыть настройки", prominent: true) { Permissions.openMicrophoneSettings() }
+                hint("Доступ был запрещён. Включите Shepot в разделе «Микрофон».")
+                PillButton(title: "Открыть настройки", kind: .primary) { Permissions.openMicrophoneSettings() }
             }
         }
     }
@@ -124,16 +126,16 @@ private struct OnboardingView: View {
         stepLayout(
             icon: "hand.tap.fill",
             title: "Универсальный доступ",
-            text: "Нужен, чтобы вставлять текст в другие приложения и слышать правые ⌘ и ⌥. Dictate ничего не читает с экрана."
+            text: "Нужен, чтобы вставлять текст в другие приложения и слышать правые ⌘ и ⌥. Shepot ничего не читает с экрана."
         ) {
             if state.isAccessibilityTrusted {
                 done("Доступ включён")
             } else {
-                PillButton(title: "Открыть настройки", prominent: true) {
+                PillButton(title: "Открыть настройки", kind: .primary) {
                     Permissions.promptAccessibility()
                     Permissions.openAccessibilitySettings()
                 }
-                hint("В списке включите переключатель у Dictate. Если его там нет — нажмите «+» и выберите Dictate в «Программах». Это окно заметит изменение само.")
+                hint("В списке включите переключатель у Shepot. Если его там нет — нажмите «+» и выберите Shepot в «Программах». Это окно заметит изменение само.")
             }
         }
     }
@@ -157,7 +159,7 @@ private struct OnboardingView: View {
         stepLayout(
             icon: "keyboard.fill",
             title: "Клавиша диктовки",
-            text: "Выберите, чем включать запись. Поменять можно в любой момент в меню Dictate в строке меню."
+            text: "Выберите, чем включать запись. Поменять можно в любой момент в меню Shepot в строке меню."
         ) {
             Segmented(options: AppState.Activation.allCases, selection: $state.activation) { activation in
                 state.title(for: activation)
@@ -170,7 +172,7 @@ private struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .padding(14)
                 .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.coral.opacity(0.15)))
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.accentTint))
                 .padding(.top, 6)
         }
     }
@@ -189,18 +191,20 @@ private struct OnboardingView: View {
             HStack(spacing: 6) {
                 ForEach(0..<Self.stepCount, id: \.self) { i in
                     Capsule()
-                        .fill(i == step ? Theme.coral : .white.opacity(0.2))
+                        .fill(i == step ? Theme.accent : Theme.fillSelected)
                         .frame(width: i == step ? 18 : 6, height: 6)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Шаг \(step + 1) из \(Self.stepCount)")
             Spacer()
             if step > 0 {
                 PillButton(title: "Назад") { go(step - 1) }
             }
             if step < Self.stepCount - 1 {
-                PillButton(title: step == 0 ? "Начать" : "Далее", prominent: true) { go(step + 1) }
+                PillButton(title: step == 0 ? "Начать" : "Далее", kind: .primary) { go(step + 1) }
             } else {
-                PillButton(title: "Готово", prominent: true, action: close)
+                PillButton(title: "Готово", kind: .primary, action: close)
             }
         }
         .padding(.horizontal, 28)
@@ -208,7 +212,7 @@ private struct OnboardingView: View {
     }
 
     private func go(_ next: Int) {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { step = next }
+        withAnimation(.ui(.spring(response: 0.35, dampingFraction: 0.85), reduceMotion: reduceMotion)) { step = next }
     }
 
     // MARK: Helpers
@@ -217,14 +221,15 @@ private struct OnboardingView: View {
                                            @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 16) {
             ZStack {
-                Circle().fill(Theme.coral.opacity(0.15)).frame(width: 72, height: 72)
-                Image(systemName: icon).font(.system(size: 28, weight: .semibold)).foregroundStyle(Theme.coral)
+                Circle().fill(Theme.accentTint).frame(width: 72, height: 72)
+                Image(systemName: icon).font(.system(size: 28, weight: .semibold)).foregroundStyle(Theme.accent)
             }
+            .accessibilityHidden(true)
             Text(title).font(.system(size: 22, weight: .bold))
             Text(text)
                 .font(.system(size: 14))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 12) { content() }.padding(.top, 8)
         }
@@ -232,7 +237,7 @@ private struct OnboardingView: View {
 
     private func feature(_ icon: String, _ text: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(Theme.coral).frame(width: 20)
+            Image(systemName: icon).foregroundStyle(Theme.accent).frame(width: 20)
             Text(text).font(.system(size: 13))
         }
     }
@@ -240,14 +245,14 @@ private struct OnboardingView: View {
     private func done(_ text: String) -> some View {
         Label(text, systemImage: "checkmark.circle.fill")
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.green)
+            .foregroundStyle(Theme.success)
     }
 
     private func hint(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 12))
             .multilineTextAlignment(.center)
-            .foregroundStyle(Theme.secondaryText)
+            .foregroundStyle(Theme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

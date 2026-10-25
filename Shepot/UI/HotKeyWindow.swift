@@ -23,7 +23,7 @@ enum HotKeyWindow {
             backing: .buffered,
             defer: false
         )
-        window.title = "Сочетание для Dictate"
+        window.title = "Сочетание для Shepot"
         window.titlebarAppearsTransparent = true
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = Theme.panelNS
@@ -45,13 +45,13 @@ private struct HotKeyRecorder: View {
                 .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(Theme.coral))
+                .background(Capsule().fill(Theme.accentSolid))
             Text("Нужен хотя бы один из ⌃ ⌥ ⇧ ⌘ (или F-клавиша). Esc — отмена.")
                 .font(.caption)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
             if let hotKeyError = state.hotKeyError {
-                Text(hotKeyError).font(.caption).foregroundStyle(.orange)
+                Text(hotKeyError).font(.caption).foregroundStyle(Theme.warning)
             }
         }
         .padding(20)

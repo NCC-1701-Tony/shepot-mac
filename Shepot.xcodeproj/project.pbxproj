@@ -11,13 +11,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		D1C7A7E00000000000000004 /* Dictate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dictate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1C7A7E00000000000000004 /* Shepot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shepot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		D1C7A7E00000000000000005 /* Dictate */ = {
+		D1C7A7E00000000000000005 /* Shepot */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Dictate;
+			path = Shepot;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -37,7 +37,7 @@
 		D1C7A7E00000000000000002 = {
 			isa = PBXGroup;
 			children = (
-				D1C7A7E00000000000000005 /* Dictate */,
+				D1C7A7E00000000000000005 /* Shepot */,
 				D1C7A7E00000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -45,7 +45,7 @@
 		D1C7A7E00000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D1C7A7E00000000000000004 /* Dictate.app */,
+				D1C7A7E00000000000000004 /* Shepot.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -53,9 +53,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		D1C7A7E00000000000000006 /* Dictate */ = {
+		D1C7A7E00000000000000006 /* Shepot */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D1C7A7E0000000000000000B /* Build configuration list for PBXNativeTarget "Dictate" */;
+			buildConfigurationList = D1C7A7E0000000000000000B /* Build configuration list for PBXNativeTarget "Shepot" */;
 			buildPhases = (
 				D1C7A7E00000000000000007 /* Sources */,
 				D1C7A7E00000000000000008 /* Frameworks */,
@@ -66,14 +66,14 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				D1C7A7E00000000000000005 /* Dictate */,
+				D1C7A7E00000000000000005 /* Shepot */,
 			);
-			name = Dictate;
+			name = Shepot;
 			packageProductDependencies = (
 				D1C7A7E00000000000000011 /* WhisperKit */,
 			);
-			productName = Dictate;
-			productReference = D1C7A7E00000000000000004 /* Dictate.app */;
+			productName = Shepot;
+			productReference = D1C7A7E00000000000000004 /* Shepot.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -86,7 +86,7 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 			};
-			buildConfigurationList = D1C7A7E0000000000000000A /* Build configuration list for PBXProject "Dictate" */;
+			buildConfigurationList = D1C7A7E0000000000000000A /* Build configuration list for PBXProject "Shepot" */;
 			developmentRegion = ru;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -104,7 +104,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D1C7A7E00000000000000006 /* Dictate */,
+				D1C7A7E00000000000000006 /* Shepot */,
 			);
 		};
 /* End PBXProject section */
@@ -176,21 +176,21 @@
 				CODE_SIGN_IDENTITY = "Dictate Local";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Dictate;
+				INFOPLIST_KEY_CFBundleDisplayName = Shepot;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dictate записывает голос, чтобы распознать его на этом Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Shepot записывает голос, чтобы распознать его на этом Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.antondanilov.Dictate;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.antondanilov.shepot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -203,21 +203,21 @@
 				CODE_SIGN_IDENTITY = "Dictate Local";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Dictate;
+				INFOPLIST_KEY_CFBundleDisplayName = Shepot;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dictate записывает голос, чтобы распознать его на этом Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Shepot записывает голос, чтобы распознать его на этом Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.antondanilov.Dictate;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.antondanilov.shepot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -226,7 +226,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		D1C7A7E0000000000000000A /* Build configuration list for PBXProject "Dictate" */ = {
+		D1C7A7E0000000000000000A /* Build configuration list for PBXProject "Shepot" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D1C7A7E0000000000000000C /* Debug */,
@@ -235,7 +235,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D1C7A7E0000000000000000B /* Build configuration list for PBXNativeTarget "Dictate" */ = {
+		D1C7A7E0000000000000000B /* Build configuration list for PBXNativeTarget "Shepot" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D1C7A7E0000000000000000E /* Debug */,

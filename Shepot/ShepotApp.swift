@@ -1,8 +1,12 @@
 import SwiftUI
 
 @main
-struct DictateApp: App {
+struct ShepotApp: App {
     @StateObject private var state = AppState()
+
+    init() {
+        Migration.run() // before AppState reads any settings
+    }
 
     var body: some Scene {
         // Menu bar only (LSUIElement): no Dock icon, no main window.

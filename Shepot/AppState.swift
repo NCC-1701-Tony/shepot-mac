@@ -136,6 +136,8 @@ final class AppState: ObservableObject {
     var statusLine: String {
         switch phase {
         case .idle:
+            // Say "not ready" in words, not only with the gray dot.
+            guard installed.contains(selectedModel) else { return "Скачайте модель,\nчтобы начать" }
             let key = title(for: activation)
             // Two balanced lines in the panel header.
             return triggerMode == .hold ? "Удерживайте \(key)\nи говорите" : "Нажмите \(key),\nчтобы начать и закончить"
@@ -175,7 +177,7 @@ final class AppState: ObservableObject {
                 try await transcriber.load(id)
                 if selectedModel == id { modelStatus = "Модель готова" }
             } catch {
-                if selectedModel == id { modelStatus = "Ошибка модели: \(error.localizedDescription)" }
+                if selectedModel == id { modelStatus = "Не удалось загрузить модель. Удалите её и скачайте заново." }
             }
         }
     }
@@ -191,7 +193,7 @@ final class AppState: ObservableObject {
             refreshInstalled()
             selectedModel = model.id // a freshly downloaded model is what the user wants
         } catch {
-            self.error = "Не удалось скачать модель: \(error.localizedDescription)"
+            self.error = "Не удалось скачать \(model.title). Проверьте подключение к интернету и нажмите «Скачать» ещё раз."
         }
     }
 
@@ -201,7 +203,7 @@ final class AppState: ObservableObject {
         do {
             try ModelStore.delete(model.id)
         } catch {
-            self.error = "Не удалось удалить модель: \(error.localizedDescription)"
+            self.error = "Не удалось удалить \(model.title). Выйдите из Shepot и удалите папку ~/Library/Application Support/Shepot/Models вручную."
         }
         refreshInstalled()
         if model.id == selectedModel { prepareModel() }
@@ -217,7 +219,7 @@ final class AppState: ObservableObject {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            self.error = "Не удалось изменить автозапуск: \(error.localizedDescription)"
+            self.error = "Не удалось изменить автозапуск. Убедитесь, что Shepot лежит в «Программах», и попробуйте снова."
         }
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -235,15 +237,26 @@ final class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.deliver(entry.text) }
     }
 
+    /// Last removal, so it can be undone instead of asking for confirmation.
+    @Published private(set) var historyUndo: (message: String, entries: [DictationEntry])?
+
     func remove(_ entry: DictationEntry) {
+        historyUndo = ("Запись удалена", history)
         history.removeAll { $0.id == entry.id }
     }
 
     func clearHistory() {
+        historyUndo = ("История очищена", history)
         history = []
     }
 
+    func undoHistoryChange() {
+        if let historyUndo { history = historyUndo.entries }
+        historyUndo = nil
+    }
+
     private func addToHistory(_ text: String) {
+        historyUndo = nil
         history.insert(DictationEntry(text: text, date: Date()), at: 0)
         if history.count > History.limit { history.removeLast(history.count - History.limit) }
     }
@@ -267,7 +280,7 @@ final class AppState: ObservableObject {
             hotKeyError = nil
             if activation == .combo { applyActivation() } else { activation = .combo }
         } else {
-            hotKeyError = "Сочетание \(combo.label) занято другим приложением."
+            hotKeyError = "Сочетание \(combo.label) занято другим приложением. Выберите другое."
             applyActivation()
         }
     }
@@ -290,20 +303,20 @@ final class AppState: ObservableObject {
 
         error = nil
         guard installed.contains(selectedModel) else {
-            error = "Сначала скачайте модель в меню Dictate."
+            error = "Модель не скачана. Откройте меню Shepot → «Модели» и нажмите «Скачать»."
             NSSound.beep()
             return
         }
         guard await Permissions.requestMicrophone() else {
             refreshPermissions()
-            error = "Нет доступа к микрофону."
+            error = "Нет доступа к микрофону. Включите Shepot в Системных настройках → «Микрофон»."
             NSSound.beep()
             return
         }
         do {
             try recorder.start()
         } catch {
-            self.error = "Не удалось начать запись: \(error.localizedDescription)"
+            self.error = "Не удалось начать запись. Проверьте, что микрофон подключён, и попробуйте снова."
             return
         }
         phase = .recording
@@ -344,7 +357,7 @@ final class AppState: ObservableObject {
                 deliver(text)
             }
         } catch {
-            self.error = "Ошибка распознавания: \(error.localizedDescription)"
+            self.error = "Не удалось распознать речь. Попробуйте ещё раз или выберите другую модель."
         }
         samples.removeAll() // audio is never kept after transcription
     }
@@ -354,7 +367,7 @@ final class AppState: ObservableObject {
         guard isAccessibilityTrusted else {
             // Can't send Cmd+V without Accessibility, so leave the text on the clipboard.
             copy(text)
-            error = "Текст скопирован в буфер, но не вставлен: нужен «Универсальный доступ»."
+            error = "Текст в буфере — вставьте его ⌘V. Чтобы он вставлялся сам, включите Shepot в «Универсальном доступе»."
             Permissions.promptAccessibility()
             return
         }
@@ -404,7 +417,7 @@ final class AppState: ObservableObject {
             modifierTrigger.stop()
             hotKeyError = hotKey.register(hotKeyCombo)
                 ? nil
-                : "Сочетание \(hotKeyCombo.label) занято другим приложением (например, Superwhisper или Spotlight)."
+                : "Сочетание \(hotKeyCombo.label) занято другим приложением (например, Superwhisper или Spotlight). Выберите другое."
         case .rightCommand, .rightOption:
             hotKey.unregister()
             hotKeyError = nil
