@@ -65,11 +65,15 @@ final class AppState: ObservableObject {
             overlay.setStyle(islandStyle)
         }
     }
+    @Published var soundsEnabled = UserDefaults.standard.object(forKey: Keys.sounds) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(soundsEnabled, forKey: Keys.sounds) }
+    }
     @Published private(set) var hotKeyCombo = AppState.loadCombo()
 
     private enum Keys {
         static let model = "model", language = "language", mode = "triggerMode"
         static let hotKey = "hotKey", activation = "activation", island = "islandStyle"
+        static let sounds = "sounds"
     }
 
     private let recorder = Recorder()
@@ -320,6 +324,7 @@ final class AppState: ObservableObject {
             return
         }
         phase = .recording
+        play(.start)
         if cancelRequested {
             cancelRecording()
         } else if stopRequested {
@@ -336,12 +341,14 @@ final class AppState: ObservableObject {
         guard phase == .recording else { return }
         var samples = recorder.stop()
         samples.removeAll()
+        play(.stop)
         phase = .idle
     }
 
     private func stopAndTranscribe() async {
         guard phase == .recording else { return }
         var samples = recorder.stop()
+        play(.stop)
         // Ignore accidental taps shorter than 0.3 s.
         guard samples.count > Recorder.sampleRate * 3 / 10 else {
             phase = .idle
@@ -372,6 +379,11 @@ final class AppState: ObservableObject {
             return
         }
         Paster.paste(text)
+        play(.paste)
+    }
+
+    private func play(_ sound: Sound) {
+        if soundsEnabled { sound.play() }
     }
 
     private func updateOverlay() {

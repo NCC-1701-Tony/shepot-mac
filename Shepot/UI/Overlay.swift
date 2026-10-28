@@ -42,6 +42,7 @@ final class OverlayController {
     static let width: CGFloat = 560
     static let closedHeight: CGFloat = 180
     static let openHeight: CGFloat = 560
+    private static let behavior: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
     private let panel: OverlayPanel
     private let model = OverlayModel()
@@ -62,7 +63,7 @@ final class OverlayController {
         panel.hasShadow = false // drawn in SwiftUI instead
         panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.collectionBehavior = Self.behavior
         panel.contentView = NSHostingView(
             rootView: OverlayView(meter: meter, model: model).environmentObject(state)
         )
@@ -74,26 +75,53 @@ final class OverlayController {
         observers.append(model.$openMenu.dropFirst().sink { [weak self] menu in
             self?.resize(open: menu != nil)
         })
+        observers.append(NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.activeSpaceDidChangeNotification)
+            .sink { [weak self] _ in self?.spaceOrScreenChanged() })
+        observers.append(NotificationCenter.default
+            .publisher(for: NSApplication.didChangeScreenParametersNotification)
+            .sink { [weak self] _ in self?.spaceOrScreenChanged() })
     }
 
     func show(_ mode: OverlayModel.Mode, style: AppState.IslandStyle) {
         model.mode = mode
         wantsVisible = true
-        if !panel.isVisible {
+        // Re-place and re-raise whenever the island isn't up on this Space yet:
+        // a panel left over from another Space or screen would otherwise stay hidden.
+        if !panel.isVisible || !panel.isOnActiveSpace || !model.expanded {
             model.style = style
             place()
-            panel.orderFrontRegardless()
         }
+        bringToFront()
         guard !model.expanded else { return }
-        DispatchQueue.main.async { [model] in
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) { model.expanded = true }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.wantsVisible else { return }
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) { self.model.expanded = true }
         }
     }
 
     func hide() {
         wantsVisible = false
         model.mode = .idle
+        if !model.expanded, !model.isHovering {
+            panel.orderOut(nil) // never expanded, nothing to animate
+            return
+        }
         collapseIfIdle()
+    }
+
+    /// Full-screen apps live on their own Space; re-assert the level and behavior before raising.
+    private func bringToFront() {
+        panel.level = .screenSaver
+        panel.collectionBehavior = Self.behavior
+        panel.orderFrontRegardless()
+    }
+
+    /// Follows the user to a new Space or a changed display while the island is needed.
+    private func spaceOrScreenChanged() {
+        guard wantsVisible else { return }
+        place()
+        bringToFront()
     }
 
     func setStyle(_ style: AppState.IslandStyle) {
