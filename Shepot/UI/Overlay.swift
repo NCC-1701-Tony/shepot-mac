@@ -20,7 +20,7 @@ final class LevelMeter: ObservableObject {
 
 @MainActor
 final class OverlayModel: ObservableObject {
-    enum Mode { case recording, transcribing, idle }
+    enum Mode { case recording, transcribing, failed, idle }
     enum Menu { case model, language, history }
     @Published var mode = Mode.recording
     @Published var openMenu: Menu?
@@ -28,6 +28,7 @@ final class OverlayModel: ObservableObject {
     @Published var expanded = false
     @Published var notch = CGSize(width: 190, height: 32) // collapsed size in notch style
     @Published var isHovering = false
+    @Published var alertText = ""
 }
 
 /// Borderless panel that may sit over the menu bar (notch style).
@@ -44,29 +45,19 @@ final class OverlayController {
     static let openHeight: CGFloat = 560
     private static let behavior: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
-    private let panel: OverlayPanel
+    private var panel: OverlayPanel
     private let model = OverlayModel()
+    private let state: AppState
+    private let meter: LevelMeter
     private var wantsVisible = false
+    private var alertID = 0 // bumps per alert so an old timer can't close a newer one
+    private var alertActive = false
     private var observers: [AnyCancellable] = []
 
     init(state: AppState, meter: LevelMeter) {
-        panel = OverlayPanel(
-            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: Self.closedHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: true
-        )
-        panel.isFloatingPanel = true
-        panel.level = .screenSaver // above full-screen apps and the menu bar
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = false // drawn in SwiftUI instead
-        panel.becomesKeyOnlyIfNeeded = true
-        panel.hidesOnDeactivate = false
-        panel.collectionBehavior = Self.behavior
-        panel.contentView = NSHostingView(
-            rootView: OverlayView(meter: meter, model: model).environmentObject(state)
-        )
+        self.state = state
+        self.meter = meter
+        panel = Self.makePanel(state: state, meter: meter, model: model)
         // Keep the island while the mouse is over it; collapse once it leaves.
         observers.append(model.$isHovering.dropFirst().sink { [weak self] hovering in
             if !hovering { DispatchQueue.main.async { self?.collapseIfIdle() } }
@@ -83,16 +74,60 @@ final class OverlayController {
             .sink { [weak self] _ in self?.spaceOrScreenChanged() })
     }
 
+    /// A window registered on one Space sometimes never appears after a Space switch.
+    /// A fresh window per appearance is cheap and always registers on the current Space.
+    private static func makePanel(state: AppState, meter: LevelMeter, model: OverlayModel) -> OverlayPanel {
+        let panel = OverlayPanel(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: closedHeight),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: true
+        )
+        panel.isFloatingPanel = true
+        panel.level = .screenSaver // above full-screen apps and the menu bar
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false // drawn in SwiftUI instead
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.hidesOnDeactivate = false
+        panel.isReleasedWhenClosed = false
+        panel.collectionBehavior = behavior
+        panel.contentView = NSHostingView(rootView: OverlayView(meter: meter, model: model).environmentObject(state))
+        return panel
+    }
+
+    private func rebuildPanel() {
+        panel.orderOut(nil)
+        panel = Self.makePanel(state: state, meter: meter, model: model)
+    }
+
+    /// Short error on the island itself, so a failed dictation isn't noticed only in the menu.
+    func showAlert(_ text: String, style: AppState.IslandStyle) {
+        model.alertText = text
+        show(.failed, style: style)
+        alertActive = true
+        alertID += 1
+        let id = alertID
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) { [weak self] in
+            guard let self, self.alertID == id else { return }
+            self.alertActive = false
+            if self.model.mode == .failed { self.hide() }
+        }
+    }
+
     func show(_ mode: OverlayModel.Mode, style: AppState.IslandStyle) {
+        if mode != .failed { alertActive = false }
         model.mode = mode
         wantsVisible = true
         // Re-place and re-raise whenever the island isn't up on this Space yet:
         // a panel left over from another Space or screen would otherwise stay hidden.
         if !panel.isVisible || !panel.isOnActiveSpace || !model.expanded {
+            if !model.isHovering { rebuildPanel() }
             model.style = style
             place()
         }
         bringToFront()
+        verifyVisible(attempts: 3)
         guard !model.expanded else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.wantsVisible else { return }
@@ -101,6 +136,7 @@ final class OverlayController {
     }
 
     func hide() {
+        if alertActive { return } // the alert closes itself
         wantsVisible = false
         model.mode = .idle
         if !model.expanded, !model.isHovering {
@@ -117,11 +153,26 @@ final class OverlayController {
         panel.orderFrontRegardless()
     }
 
+    /// Safety net: if the window server didn't actually show the island, rebuild it and retry.
+    private func verifyVisible(attempts: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, self.wantsVisible, attempts > 0 else { return }
+            if !self.panel.occlusionState.contains(.visible) {
+                self.rebuildPanel()
+                self.place()
+                self.bringToFront()
+                self.verifyVisible(attempts: attempts - 1)
+            }
+        }
+    }
+
     /// Follows the user to a new Space or a changed display while the island is needed.
     private func spaceOrScreenChanged() {
         guard wantsVisible else { return }
+        rebuildPanel()
         place()
         bringToFront()
+        verifyVisible(attempts: 3)
     }
 
     func setStyle(_ style: AppState.IslandStyle) {
@@ -233,7 +284,33 @@ struct OverlayView: View {
 
     // MARK: Content
 
+    @ViewBuilder
     private var content: some View {
+        if model.mode == .failed { alertContent } else { waveContent }
+    }
+
+    private var alertContent: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Theme.dangerTint)
+                .frame(width: 28, height: 28)
+                .overlay(
+                    Image(systemName: "exclamationmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.danger)
+                )
+            Text(model.alertText)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var waveContent: some View {
         ZStack {
             // Wave stays exactly centered; icon and title sit at the edges.
             bars.frame(width: 110, height: 28)
@@ -283,6 +360,8 @@ struct OverlayView: View {
                     }
                 }
             }
+        case .failed:
+            EmptyView()
         case .idle:
             HStack(spacing: 5) {
                 ForEach(0..<LevelMeter.barCount, id: \.self) { _ in

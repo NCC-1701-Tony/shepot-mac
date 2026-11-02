@@ -2,7 +2,7 @@ import AppKit
 
 /// Short UI cues for recording start/stop and paste. Files come from scripts/make-sounds.py.
 enum Sound: String {
-    case start, stop, paste
+    case start, stop, paste, error
 
     private static var cache: [Sound: NSSound] = [:]
 

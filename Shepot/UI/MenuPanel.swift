@@ -168,6 +168,10 @@ struct MenuPanel: View {
                 Text("Запускать при входе").font(.system(size: 13))
             }
             .toggleStyle(CoralSwitchStyle())
+            Toggle(isOn: $state.skipFinalPeriod) {
+                Text("Без точки в конце").font(.system(size: 13))
+            }
+            .toggleStyle(CoralSwitchStyle())
             Toggle(isOn: $state.soundsEnabled) {
                 Text("Звуки записи и вставки").font(.system(size: 13))
             }

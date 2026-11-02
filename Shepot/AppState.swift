@@ -68,12 +68,15 @@ final class AppState: ObservableObject {
     @Published var soundsEnabled = UserDefaults.standard.object(forKey: Keys.sounds) as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundsEnabled, forKey: Keys.sounds) }
     }
+    @Published var skipFinalPeriod = UserDefaults.standard.bool(forKey: Keys.skipPeriod) {
+        didSet { UserDefaults.standard.set(skipFinalPeriod, forKey: Keys.skipPeriod) }
+    }
     @Published private(set) var hotKeyCombo = AppState.loadCombo()
 
     private enum Keys {
         static let model = "model", language = "language", mode = "triggerMode"
         static let hotKey = "hotKey", activation = "activation", island = "islandStyle"
-        static let sounds = "sounds"
+        static let sounds = "sounds", skipPeriod = "skipFinalPeriod"
     }
 
     private let recorder = Recorder()
@@ -308,13 +311,13 @@ final class AppState: ObservableObject {
         error = nil
         guard installed.contains(selectedModel) else {
             error = "Модель не скачана. Откройте меню Shepot → «Модели» и нажмите «Скачать»."
-            NSSound.beep()
+            flashError("Модель не скачана")
             return
         }
         guard await Permissions.requestMicrophone() else {
             refreshPermissions()
             error = "Нет доступа к микрофону. Включите Shepot в Системных настройках → «Микрофон»."
-            NSSound.beep()
+            flashError("Нет доступа к микрофону")
             return
         }
         do {
@@ -358,13 +361,17 @@ final class AppState: ObservableObject {
         defer { phase = .idle }
         do {
             let lang = language == "auto" ? nil : language
-            let text = try await transcriber.transcribe(samples, model: selectedModel, language: lang)
-            if !text.isEmpty {
+            let raw = try await transcriber.transcribe(samples, model: selectedModel, language: lang)
+            let text = finalized(raw)
+            if text.isEmpty {
+                flashError("Ничего не распознано")
+            } else {
                 addToHistory(text)
                 deliver(text)
             }
         } catch {
             self.error = "Не удалось распознать речь. Попробуйте ещё раз или выберите другую модель."
+            flashError("Не удалось распознать")
         }
         samples.removeAll() // audio is never kept after transcription
     }
@@ -376,10 +383,22 @@ final class AppState: ObservableObject {
             copy(text)
             error = "Текст в буфере — вставьте его ⌘V. Чтобы он вставлялся сам, включите Shepot в «Универсальном доступе»."
             Permissions.promptAccessibility()
+            flashError("Текст в буфере — вставьте ⌘V")
             return
         }
         Paster.paste(text)
         play(.paste)
+    }
+
+    /// Drops a single closing period so short messages don't read as formal; "…" and "?" stay.
+    private func finalized(_ text: String) -> String {
+        guard skipFinalPeriod, text.hasSuffix("."), !text.hasSuffix("..") else { return text }
+        return String(text.dropLast())
+    }
+
+    private func flashError(_ text: String) {
+        play(.error)
+        overlay.showAlert(text, style: islandStyle)
     }
 
     private func play(_ sound: Sound) {

@@ -65,4 +65,6 @@ write("stop.wav", mix([(0, felt(69, 0.4, 9), 0.8), (0.07, felt(62, 0.5, 7), 1.0)
 # Pasted: a warm low chord (D4, F#4, A4) with a soft strum.
 write("paste.wav", mix([(0, felt(62, 0.7, 5), 0.8), (0.03, felt(66, 0.7, 5), 0.6),
                         (0.06, felt(69, 0.7, 5), 0.7)], 0.8), peak=0.45)
+# Error: two low, dull thuds ("tun-tun"), same pitch, no upper partials.
+write("error.wav", mix([(0, felt(50, 0.35, 11), 1.0), (0.17, felt(50, 0.45, 9), 0.9)], 0.7), peak=0.55)
 print("wrote", OUT)
