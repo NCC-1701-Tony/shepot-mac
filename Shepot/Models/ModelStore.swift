@@ -40,8 +40,14 @@ enum ModelStore {
             .appending(path: id, directoryHint: .isDirectory)
     }
 
+    /// The marker alone isn't trusted: a model missing a CoreML part can't load.
     static func isInstalled(_ id: String) -> Bool {
-        FileManager.default.fileExists(atPath: folder(for: id).appending(path: completeMarker).path)
+        let dir = folder(for: id)
+        let fm = FileManager.default
+        return fm.fileExists(atPath: dir.appending(path: completeMarker).path)
+            && ["AudioEncoder", "TextDecoder", "MelSpectrogram"].allSatisfy {
+                fm.fileExists(atPath: dir.appending(path: "\($0).mlmodelc").path)
+            }
     }
 
     static func delete(_ id: String) throws {

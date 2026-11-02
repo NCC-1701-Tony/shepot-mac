@@ -184,7 +184,7 @@ final class AppState: ObservableObject {
                 try await transcriber.load(id)
                 if selectedModel == id { modelStatus = "Модель готова" }
             } catch {
-                if selectedModel == id { modelStatus = "Не удалось загрузить модель. Удалите её и скачайте заново." }
+                if selectedModel == id { modelStatus = "Не удалось загрузить модель (\(Self.brief(error))). Удалите её и скачайте заново." }
             }
         }
     }
@@ -370,7 +370,7 @@ final class AppState: ObservableObject {
                 deliver(text)
             }
         } catch {
-            self.error = "Не удалось распознать речь. Попробуйте ещё раз или выберите другую модель."
+            self.error = "Не удалось распознать речь (\(Self.brief(error))). Попробуйте ещё раз или выберите другую модель."
             flashError("Не удалось распознать")
         }
         samples.removeAll() // audio is never kept after transcription
@@ -394,6 +394,11 @@ final class AppState: ObservableObject {
     private func finalized(_ text: String) -> String {
         guard skipFinalPeriod, text.hasSuffix("."), !text.hasSuffix("..") else { return text }
         return String(text.dropLast())
+    }
+
+    /// First line of the real cause, so a failure can be told apart without a debugger.
+    private static func brief(_ error: Error) -> String {
+        String(String(describing: error).split(separator: "\n").first?.prefix(140) ?? "")
     }
 
     private func flashError(_ text: String) {
