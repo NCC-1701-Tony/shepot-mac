@@ -77,7 +77,7 @@ final class AppState: ObservableObject {
     @Published var soundsEnabled = UserDefaults.standard.object(forKey: Keys.sounds) as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundsEnabled, forKey: Keys.sounds) }
     }
-    @Published var soundSet = SoundSet(rawValue: UserDefaults.standard.string(forKey: Keys.soundSet) ?? "") ?? .standard {
+    @Published var soundSet = SoundSet(rawValue: AppState.storedSoundSet()) ?? .standard {
         didSet { UserDefaults.standard.set(soundSet.rawValue, forKey: Keys.soundSet) }
     }
     @Published var visualSource = VisualSource(rawValue: UserDefaults.standard.string(forKey: Keys.visualSource) ?? "") ?? .spectrum {
@@ -90,6 +90,12 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(skipFinalPeriod, forKey: Keys.skipPeriod) }
     }
     @Published private(set) var hotKeyCombo = AppState.loadCombo()
+
+    /// "air" was renamed to "soft"; keep the user's choice.
+    private static func storedSoundSet() -> String {
+        let stored = UserDefaults.standard.string(forKey: Keys.soundSet) ?? ""
+        return stored == "air" ? "soft" : stored
+    }
 
     private enum Keys {
         static let model = "model", language = "language", mode = "triggerMode"

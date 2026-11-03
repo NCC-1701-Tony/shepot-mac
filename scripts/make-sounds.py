@@ -1,5 +1,5 @@
 """Generates the UI sound sets: soft, low tones with nothing harsh on top.
-Sets: standard (felt mallet), pixel (soft chip blips), air (breath), keys (quiet key taps).
+Sets: standard (felt mallet), pixel (futuristic FM chimes), soft (round tones), keys (quiet key taps).
 Run: python3 scripts/make-sounds.py  →  Shepot/Sounds/<set>-{start,stop,paste,error}.wav"""
 import os
 import wave
@@ -62,27 +62,33 @@ def write(name, x, peak=0.5, cutoff=2200):
 rng = np.random.default_rng(3)
 
 
-def blip(note, dur=0.07, duty=0.25, bits=16):
-    """Chip-style pulse blip, bit-crushed and rounded off by the low-pass in write()."""
+def fm(note, dur=0.3, index=2.0, ratio=2.0, decay=9.0, bright=14.0):
+    """Glassy digital tone: a sine whose phase is modulated by a faster, quickly fading sine."""
     t = np.arange(int(dur * SR)) / SR
     f = hz(note)
-    pulse = np.where((t * f) % 1.0 < duty, 1.0, -1.0)
-    tri = 2 * np.abs(2 * ((t * f) % 1.0) - 1) - 1
-    x = np.round((0.55 * pulse + 0.45 * tri) * bits / 2) / (bits / 2)
-    return x * np.minimum(t / 0.002, 1) * np.exp(-t * 28)
+    mod = index * np.exp(-t * bright) * np.sin(2 * np.pi * f * ratio * t)
+    return np.sin(2 * np.pi * f * t + mod) * np.minimum(t / 0.003, 1) * np.exp(-t * decay)
 
 
-def breath(dur, lo, hi, rise=0.5):
-    """Airy swell: noise band-limited between lo and hi Hz, swelling in (rise>0.5) or fading out."""
+def sweep(f0, f1, dur=0.2):
+    """Short rising or falling glide with a soft bell-shaped envelope, like a system powering up."""
     t = np.arange(int(dur * SR)) / SR
-    n = rng.standard_normal(len(t))
-    band = lp(n, hi) - lp(n, lo)
-    u = t / t[-1]
-    env = np.sin(np.pi * u ** (1.6 if rise >= 0.5 else 0.6)) ** 2
-    return band * env
+    f = f0 + (f1 - f0) * (t / dur) ** 1.5
+    s = np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.3 * np.sin(4 * np.pi * np.cumsum(f) / SR)
+    return s * np.sin(np.pi * t / dur) ** 2
 
 
-def air_tone(note, dur=0.6, decay=5.0):
+def echo(x, taps=((0.09, 0.38), (0.18, 0.2), (0.27, 0.1))):
+    """Short digital echo tail: delayed, quieter copies."""
+    out = np.zeros(len(x) + int(0.3 * SR))
+    out[:len(x)] += x
+    for delay, gain in taps:
+        i = int(delay * SR)
+        out[i:i + len(x)] += x * gain
+    return out
+
+
+def soft_tone(note, dur=0.6, decay=5.0):
     """Soft sine with a slow attack, like a breath on a flute."""
     t = np.arange(int(dur * SR)) / SR
     f = hz(note)
@@ -110,24 +116,24 @@ sets["standard"] = dict(
     error=mix([(0, felt(50, 0.35, 11), 1.0), (0.17, felt(50, 0.45, 9), 0.9)], 0.7),
 )
 
-# Pixel: tiny chip blips, rounded off so nothing bites.
+# Tech: clean FM chimes and glides, dry, like a futuristic assistant waking up.
 sets["pixel"] = dict(
-    cutoff=2800,
-    start=mix([(0, blip(69), 0.8), (0.055, blip(76), 0.9), (0.11, blip(81), 1.0)], 0.3),
-    stop=mix([(0, blip(81), 0.8), (0.055, blip(76), 0.9), (0.11, blip(69), 1.0)], 0.3),
-    paste=mix([(0, blip(72), 0.7), (0.05, blip(79), 0.8), (0.10, blip(84, 0.12), 1.0)], 0.35),
-    error=mix([(0, blip(43, 0.12, 0.5, 8), 1.0), (0.17, blip(43, 0.16, 0.5, 8), 0.9)], 0.45),
+    cutoff=5200,
+    start=mix([(0, sweep(300, 900, 0.18), 0.5), (0.12, fm(69, 0.3), 0.8), (0.19, fm(76, 0.3), 0.9),
+                    (0.26, fm(81, 0.45, 1.6, 2.0, 7), 1.0)], 0.75),
+    stop=mix([(0, fm(81, 0.3), 0.8), (0.07, fm(76, 0.3), 0.9), (0.14, fm(69, 0.4, 1.6, 2.0, 8), 1.0),
+                   (0.16, sweep(900, 300, 0.2), 0.45)], 0.6),
+    paste=mix([(0, fm(76, 0.25), 0.8), (0.07, fm(83, 0.4, 1.5, 2.0, 8), 1.0)], 0.5),
+    error=mix([(0, fm(45, 0.25, 3.0, 1.41, 12, 22), 1.0), (0.17, fm(45, 0.3, 3.0, 1.41, 11, 22), 0.9)], 0.55),
 )
 
-# Air: breath swells and soft flute-like tones.
-sets["air"] = dict(
+# Soft: round sine tones with a slow attack, nothing airy or bright.
+sets["soft"] = dict(
     cutoff=1300,
-    start=mix([(0, breath(0.35, 250, 1000, 0.6), 0.8), (0.12, air_tone(62, 0.5), 0.7)], 0.6),
-    stop=mix([(0, air_tone(62, 0.4), 0.5), (0.05, breath(0.35, 250, 1000, 0.4), 0.8)], 0.6),
-    paste=mix([(0, breath(0.3, 250, 1000, 0.6), 0.6), (0.08, air_tone(55, 0.8, 4), 0.7),
-               (0.12, air_tone(62, 0.8, 4), 0.6), (0.16, air_tone(66, 0.8, 4), 0.5)], 0.9),
-    error=mix([(0, breath(0.2, 120, 600, 0.6), 1.0), (0.18, breath(0.25, 120, 600, 0.6), 0.9),
-               (0, air_tone(41, 0.3, 9), 0.5), (0.18, air_tone(41, 0.3, 9), 0.5)], 0.5),
+    start=mix([(0, soft_tone(62, 0.5), 1.0)], 0.5),
+    stop=mix([(0, soft_tone(62, 0.4), 1.0)], 0.4),
+    paste=mix([(0, soft_tone(55, 0.8, 4), 0.8), (0.04, soft_tone(62, 0.8, 4), 0.7), (0.08, soft_tone(66, 0.8, 4), 0.6)], 0.9),
+    error=mix([(0, soft_tone(41, 0.35, 7), 1.0), (0.18, soft_tone(41, 0.4, 7), 0.9)], 0.6),
 )
 
 # Keys: short quiet keyboard-like taps.
@@ -139,7 +145,7 @@ sets["keys"] = dict(
     error=mix([(0, key(90, 0.12), 1.0), (0.16, key(80, 0.14), 0.9)], 0.35),
 )
 
-QUIET = {"keys": 0.34, "pixel": 0.4}
+QUIET = {"keys": 0.34, "pixel": 0.45}
 for name, parts in sets.items():
     cutoff = parts.pop("cutoff")
     for kind, signal in parts.items():

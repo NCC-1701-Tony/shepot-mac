@@ -2,22 +2,22 @@ import AppKit
 
 /// Sound sets for the UI cues. Files come from scripts/make-sounds.py as "<set>-<cue>.wav".
 enum SoundSet: String, CaseIterable {
-    case standard, pixel, air, keys
+    case standard, pixel, soft, keys
 
     var title: String {
         switch self {
         case .standard: "Стандартный"
-        case .pixel: "Пиксельный"
-        case .air: "Воздушный"
+        case .pixel: "Технологичный"
+        case .soft: "Мягкий"
         case .keys: "Клавиши"
         }
     }
 
     var note: String {
         switch self {
-        case .standard: "Мягкие электронные тоны"
-        case .pixel: "Маленькие цифровые блипы"
-        case .air: "Тихое дыхание, мягкие тона"
+        case .standard: "Мягкие тона"
+        case .pixel: "Чистые цифровые тона"
+        case .soft: "Округлые тихие тона"
         case .keys: "Тихие щелчки клавиш"
         }
     }

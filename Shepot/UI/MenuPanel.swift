@@ -190,10 +190,13 @@ struct MenuPanel: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(set.title).font(.system(size: 13, weight: .semibold))
                             Text(set.note).font(.system(size: 11))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                                 .foregroundStyle(isOn ? Theme.textPrimary.opacity(0.85) : Theme.textSecondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
+                        .padding(.horizontal, 10)
+                        .frame(height: 54)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(isOn ? Theme.accentSolid : Theme.track))
                         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
