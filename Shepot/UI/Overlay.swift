@@ -347,7 +347,6 @@ struct OverlayView: View {
         content
             .frame(width: Self.islandWidth, height: Self.islandHeight)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.surface))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.stroke))
             .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
             // Under "Reduce motion" the island only fades.
             .scaleEffect(model.expanded || reduceMotion ? 1 : 0.92)
