@@ -2,12 +2,12 @@ import AppKit
 
 /// Sound sets for the UI cues. Files come from scripts/make-sounds.py as "<set>-<cue>.wav".
 enum SoundSet: String, CaseIterable {
-    case standard, pixel, soft, keys
+    case standard, nature, soft, keys
 
     var title: String {
         switch self {
         case .standard: "Стандартный"
-        case .pixel: "Технологичный"
+        case .nature: "Природный"
         case .soft: "Мягкий"
         case .keys: "Клавиши"
         }
@@ -16,9 +16,9 @@ enum SoundSet: String, CaseIterable {
     var note: String {
         switch self {
         case .standard: "Мягкие тона"
-        case .pixel: "Чистые цифровые тона"
+        case .nature: "Лёгкий шум ветра"
         case .soft: "Округлые тихие тона"
-        case .keys: "Тихие щелчки клавиш"
+        case .keys: "Тактильные касания"
         }
     }
 }
@@ -35,7 +35,7 @@ enum Sound: String {
         guard let sound else { return }
         Self.cache[name] = sound
         sound.stop() // restart if it's still ringing
-        sound.volume = 0.6
+        sound.volume = 0.5
         sound.play()
     }
 }

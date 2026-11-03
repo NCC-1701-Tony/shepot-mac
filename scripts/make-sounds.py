@@ -1,5 +1,5 @@
 """Generates the UI sound sets: soft, low tones with nothing harsh on top.
-Sets: standard (felt mallet), pixel (futuristic FM chimes), soft (round tones), keys (quiet key taps).
+Sets: standard (felt mallet), nature (airy whooshes), soft (round tones), keys (haptic taps).
 Run: python3 scripts/make-sounds.py  →  Shepot/Sounds/<set>-{start,stop,paste,error}.wav"""
 import os
 import wave
@@ -33,7 +33,7 @@ def felt(note, dur=0.5, decay=7.0):
     s = (np.sin(2 * np.pi * f * t)
          + 0.18 * np.sin(2 * np.pi * 2 * f * t) * np.exp(-t * 10)
          + 0.08 * np.sin(2 * np.pi * 4 * f * t) * np.exp(-t * 30))
-    env = np.minimum(t / 0.006, 1) * np.exp(-t * decay)
+    env = np.minimum(t / 0.02, 1) * np.exp(-t * decay)
     return s * env
 
 
@@ -93,15 +93,36 @@ def soft_tone(note, dur=0.6, decay=5.0):
     t = np.arange(int(dur * SR)) / SR
     f = hz(note)
     s = np.sin(2 * np.pi * f * t) + 0.05 * np.sin(2 * np.pi * 2 * f * t)
-    return s * np.minimum(t / 0.08, 1) * np.exp(-t * decay)
+    return s * np.minimum(t / 0.14, 1) * np.exp(-t * decay)
 
 
-def key(pitch=150, dur=0.08):
-    """Quiet key tap: a short low thump and a dull click on top."""
+def tap(pitch=90, dur=0.09, decay=55.0):
+    """Haptic tap: a low sine that drops in pitch, with a barely audible soft touch at the start."""
     t = np.arange(int(dur * SR)) / SR
-    thump = np.sin(2 * np.pi * pitch * t) * np.exp(-t * 70)
-    click = lp(rng.standard_normal(len(t)), 5000) * np.exp(-t * 200)
-    return (0.7 * thump + 0.8 * click) * np.minimum(t / 0.001, 1)
+    f = pitch * (1 + 0.8 * np.exp(-t * 60))
+    body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * decay)
+    touch = lp(rng.standard_normal(len(t)), 900) * np.exp(-t * 150) * 0.25
+    return (body + touch) * np.minimum(t / 0.002, 1)
+
+
+def whoosh(f0, f1, dur=0.5, peak_at=0.4, width=0.35):
+    """Breath of wind: noise through a band-pass whose centre glides from f0 to f1, swelling and fading."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    x = rng.standard_normal(n)
+    fc = f0 * (f1 / f0) ** (t / dur)
+    g = 2 * np.sin(np.pi * np.minimum(fc, 8000) / SR)
+    q = 0.55
+    low = band = 0.0
+    out = np.empty(n)
+    for i in range(n):
+        low += g[i] * band
+        high = x[i] - low - q * band
+        band += g[i] * high
+        out[i] = band
+    u = t / dur
+    env = np.exp(-((u - peak_at) ** 2) / (2 * width ** 2 * 0.35))
+    return out * env * np.minimum(t / 0.03, 1)
 
 
 os.makedirs(OUT, exist_ok=True)
@@ -109,46 +130,44 @@ sets = {}
 
 # Standard: felt-mallet tones (the original set).
 sets["standard"] = dict(
-    cutoff=2200,
+    cutoff=1700,
     start=mix([(0, felt(62, 0.4, 9), 0.8), (0.07, felt(69, 0.5, 7), 1.0)], 0.6),
     stop=mix([(0, felt(69, 0.4, 9), 0.8), (0.07, felt(62, 0.5, 7), 1.0)], 0.6),
     paste=mix([(0, felt(62, 0.7, 5), 0.8), (0.03, felt(66, 0.7, 5), 0.6), (0.06, felt(69, 0.7, 5), 0.7)], 0.8),
     error=mix([(0, felt(50, 0.35, 11), 1.0), (0.17, felt(50, 0.45, 9), 0.9)], 0.7),
 )
 
-# Tech: clean FM chimes and glides, dry, like a futuristic assistant waking up.
-sets["pixel"] = dict(
-    cutoff=5200,
-    start=mix([(0, sweep(300, 900, 0.18), 0.5), (0.12, fm(69, 0.3), 0.8), (0.19, fm(76, 0.3), 0.9),
-                    (0.26, fm(81, 0.45, 1.6, 2.0, 7), 1.0)], 0.75),
-    stop=mix([(0, fm(81, 0.3), 0.8), (0.07, fm(76, 0.3), 0.9), (0.14, fm(69, 0.4, 1.6, 2.0, 8), 1.0),
-                   (0.16, sweep(900, 300, 0.2), 0.45)], 0.6),
-    paste=mix([(0, fm(76, 0.25), 0.8), (0.07, fm(83, 0.4, 1.5, 2.0, 8), 1.0)], 0.5),
-    error=mix([(0, fm(45, 0.25, 3.0, 1.41, 12, 22), 1.0), (0.17, fm(45, 0.3, 3.0, 1.41, 11, 22), 0.9)], 0.55),
+# Nature: soft wind whooshes, rising on start and falling on stop.
+sets["nature"] = dict(
+    cutoff=3500,
+    start=mix([(0, whoosh(500, 2200, 0.55, 0.65), 1.0)], 0.55),
+    stop=mix([(0, whoosh(2000, 450, 0.5, 0.35), 1.0)], 0.5),
+    paste=mix([(0, whoosh(900, 3000, 0.3, 0.55), 1.0)], 0.3),
+    error=mix([(0, whoosh(260, 150, 0.28, 0.4, ), 1.0), (0.2, whoosh(240, 130, 0.32, 0.4), 0.9)], 0.55),
 )
 
 # Soft: round sine tones with a slow attack, nothing airy or bright.
 sets["soft"] = dict(
-    cutoff=1300,
+    cutoff=1000,
     start=mix([(0, soft_tone(62, 0.5), 1.0)], 0.5),
     stop=mix([(0, soft_tone(62, 0.4), 1.0)], 0.4),
     paste=mix([(0, soft_tone(55, 0.8, 4), 0.8), (0.04, soft_tone(62, 0.8, 4), 0.7), (0.08, soft_tone(66, 0.8, 4), 0.6)], 0.9),
     error=mix([(0, soft_tone(41, 0.35, 7), 1.0), (0.18, soft_tone(41, 0.4, 7), 0.9)], 0.6),
 )
 
-# Keys: short quiet keyboard-like taps.
+# Keys: soft haptic-like taps.
 sets["keys"] = dict(
-    cutoff=4800,
-    start=mix([(0, key(150), 0.8), (0.07, key(210), 1.0)], 0.2),
-    stop=mix([(0, key(210), 0.8), (0.07, key(150), 1.0)], 0.2),
-    paste=mix([(0, key(170), 0.7), (0.06, key(190), 0.8), (0.11, key(160), 0.7), (0.19, key(240, 0.1), 1.0)], 0.35),
-    error=mix([(0, key(90, 0.12), 1.0), (0.16, key(80, 0.14), 0.9)], 0.35),
+    cutoff=1800,
+    start=mix([(0, tap(95), 0.8), (0.07, tap(120), 1.0)], 0.2),
+    stop=mix([(0, tap(120), 0.8), (0.07, tap(95), 1.0)], 0.2),
+    paste=mix([(0, tap(105), 0.7), (0.06, tap(115), 0.9)], 0.2),
+    error=mix([(0, tap(65, 0.12, 35), 1.0), (0.15, tap(60, 0.14, 32), 0.9)], 0.3),
 )
 
-QUIET = {"keys": 0.34, "pixel": 0.45}
+QUIET = {"keys": 0.3, "nature": 0.36}
 for name, parts in sets.items():
     cutoff = parts.pop("cutoff")
     for kind, signal in parts.items():
-        peak = QUIET.get(name, 0.55 if kind == "error" else 0.5)
+        peak = QUIET.get(name, 0.42 if kind == "error" else 0.36)
         write(f"{name}-{kind}.wav", signal, peak=peak, cutoff=cutoff)
 print("wrote", OUT)

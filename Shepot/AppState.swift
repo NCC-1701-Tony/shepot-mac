@@ -94,7 +94,11 @@ final class AppState: ObservableObject {
     /// "air" was renamed to "soft"; keep the user's choice.
     private static func storedSoundSet() -> String {
         let stored = UserDefaults.standard.string(forKey: Keys.soundSet) ?? ""
-        return stored == "air" ? "soft" : stored
+        switch stored {
+        case "air": return "soft"
+        case "pixel": return "nature"
+        default: return stored
+        }
     }
 
     private enum Keys {
