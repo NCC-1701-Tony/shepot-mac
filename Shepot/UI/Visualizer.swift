@@ -28,6 +28,10 @@ struct Visualizer: View {
             }
         }
         .frame(width: 110, height: 28)
+        .mask(LinearGradient(stops: [
+            .init(color: .clear, location: 0), .init(color: .black, location: 0.3),
+            .init(color: .black, location: 0.7), .init(color: .clear, location: 1),
+        ], startPoint: .leading, endPoint: .trailing))
     }
 
     // MARK: Waves: four soft lines, strongest in the middle, fading out at the edges
