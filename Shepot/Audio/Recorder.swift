@@ -20,8 +20,10 @@ final class Recorder {
     private var samples: [Float] = []
     private var isRunning = false
 
-    /// Input level 0…1, called on the audio thread for each buffer.
-    var onLevel: ((Float) -> Void)?
+    /// Per-band voice levels 0…1 (low first) and the overall level 0…1, per buffer, off the audio thread.
+    var onFrame: (([Float], Float) -> Void)?
+    private let spectrum = Spectrum()
+    private let analysisQueue = DispatchQueue(label: "shepot.spectrum", qos: .userInteractive)
 
     func start() throws {
         guard !isRunning else { return }
@@ -78,14 +80,28 @@ final class Recorder {
 
         let chunk = UnsafeBufferPointer(start: channel, count: Int(out.frameLength))
         lock.withLock { samples.append(contentsOf: chunk) }
-        onLevel?(Self.level(of: chunk))
+        // The audio thread only copies; the analysis runs on its own queue.
+        let copy = Array(chunk)
+        analysisQueue.async { [weak self] in
+            guard let self else { return }
+            // Large buffers get several overlapping looks, keeping the loudest of each band.
+            var bands = [Float](repeating: 0, count: Spectrum.bandCount)
+            var start = 0
+            repeat {
+                let end = min(start + 256, copy.count)
+                let part = copy[start..<end].withUnsafeBufferPointer { self.spectrum.process($0) }
+                for i in bands.indices { bands[i] = max(bands[i], part[i]) }
+                start = end
+            } while start < copy.count
+            self.onFrame?(bands, Self.level(of: copy))
+        }
     }
 
-    /// RMS mapped from -50…-10 dB to 0…1.
-    private static func level(of chunk: UnsafeBufferPointer<Float>) -> Float {
+    /// RMS mapped from -45…-10 dB to 0…1, with a small gate for room noise.
+    private static func level(of chunk: [Float]) -> Float {
         guard !chunk.isEmpty else { return 0 }
         let meanSquare = chunk.reduce(0) { $0 + $1 * $1 } / Float(chunk.count)
-        let db = 10 * log10(max(meanSquare, 1e-10))
-        return min(max((db + 50) / 40, 0), 1)
+        let level = min(max((10 * log10(max(meanSquare, 1e-10)) + 45) / 35, 0), 1)
+        return max(0, (level - 0.1) / 0.9)
     }
 }

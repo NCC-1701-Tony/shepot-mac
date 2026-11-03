@@ -20,6 +20,15 @@ final class AppState: ObservableObject {
         case notch  // drops down from the notch / top edge
     }
 
+    enum VisualSource: String, CaseIterable {
+        case spectrum // live voice frequencies
+        case ribbon   // loudness over time, scrolling
+    }
+
+    enum VisualStyle: String, CaseIterable {
+        case bars, waves, pixels
+    }
+
     static let languages: [(code: String, name: String)] = [
         ("ru", "Русский"), ("en", "English"), ("auto", "Автоопределение"),
     ]
@@ -68,6 +77,15 @@ final class AppState: ObservableObject {
     @Published var soundsEnabled = UserDefaults.standard.object(forKey: Keys.sounds) as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundsEnabled, forKey: Keys.sounds) }
     }
+    @Published var soundSet = SoundSet(rawValue: UserDefaults.standard.string(forKey: Keys.soundSet) ?? "") ?? .standard {
+        didSet { UserDefaults.standard.set(soundSet.rawValue, forKey: Keys.soundSet) }
+    }
+    @Published var visualSource = VisualSource(rawValue: UserDefaults.standard.string(forKey: Keys.visualSource) ?? "") ?? .spectrum {
+        didSet { UserDefaults.standard.set(visualSource.rawValue, forKey: Keys.visualSource) }
+    }
+    @Published var visualStyle = VisualStyle(rawValue: UserDefaults.standard.string(forKey: Keys.visualStyle) ?? "") ?? .bars {
+        didSet { UserDefaults.standard.set(visualStyle.rawValue, forKey: Keys.visualStyle) }
+    }
     @Published var skipFinalPeriod = UserDefaults.standard.bool(forKey: Keys.skipPeriod) {
         didSet { UserDefaults.standard.set(skipFinalPeriod, forKey: Keys.skipPeriod) }
     }
@@ -77,6 +95,7 @@ final class AppState: ObservableObject {
         static let model = "model", language = "language", mode = "triggerMode"
         static let hotKey = "hotKey", activation = "activation", island = "islandStyle"
         static let sounds = "sounds", skipPeriod = "skipFinalPeriod"
+        static let soundSet = "soundSet", visualSource = "visualSource", visualStyle = "visualStyle"
     }
 
     private let recorder = Recorder()
@@ -96,8 +115,8 @@ final class AppState: ObservableObject {
         refreshInstalled()
         prepareModel()
         setupTriggers()
-        recorder.onLevel = { [weak meter] level in
-            Task { @MainActor in meter?.push(level) }
+        recorder.onFrame = { [weak meter] bands, level in
+            Task { @MainActor in meter?.push(bands, level: level) }
         }
         if !Onboarding.isDone {
             // First launch: the onboarding walks through permissions and the model.
@@ -357,6 +376,13 @@ final class AppState: ObservableObject {
             phase = .idle
             return
         }
+        // Near-silent audio makes Whisper invent words ("you"), so don't send it.
+        guard (samples.map { abs($0) }.max() ?? 0) > 0.004 else {
+            flashError("Микрофон не слышит голос")
+            error = "Микрофон почти ничего не записал. Проверьте, какой микрофон выбран в Системных настройках → «Звук» → «Вход», и повторите."
+            phase = .idle
+            return
+        }
         phase = .transcribing
         defer { phase = .idle }
         do {
@@ -407,17 +433,24 @@ final class AppState: ObservableObject {
     }
 
     private func play(_ sound: Sound) {
-        if soundsEnabled { sound.play() }
+        if soundsEnabled { sound.play(set: soundSet) }
+    }
+
+    /// Plays a sample of a set so it can be judged before choosing it.
+    func previewSounds(_ set: SoundSet) {
+        Sound.start.play(set: set)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { Sound.paste.play(set: set) }
     }
 
     private func updateOverlay() {
         switch phase {
         case .recording:
-            meter.reset()
+            meter.start()
             overlay.show(.recording, style: islandStyle)
-        case .transcribing:
+        case .transcribing: // the meter keeps ticking: it also turns the loading wheel
             overlay.show(.transcribing, style: islandStyle)
         case .idle:
+            meter.stop()
             overlay.hide()
         }
     }

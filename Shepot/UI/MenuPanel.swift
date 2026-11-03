@@ -7,7 +7,7 @@ struct MenuPanel: View {
     @State private var showLanguages = false
     @State private var tab = Tab.history
 
-    private enum Tab: CaseIterable { case history, models, settings }
+    private enum Tab: CaseIterable { case history, models, settings, customize }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -17,7 +17,8 @@ struct MenuPanel: View {
                 switch tab {
                 case .history: "История"
                 case .models: "Модели"
-                case .settings: "Настройки"
+                case .settings: "Основное"
+                case .customize: "Кастомизация"
                 }
             }
             .frame(maxWidth: .infinity)
@@ -29,6 +30,7 @@ struct MenuPanel: View {
                     case .history: history
                     case .models: models
                     case .settings: settings
+                    case .customize: customization
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -129,7 +131,100 @@ struct MenuPanel: View {
     // MARK: Settings
 
     private var settings: some View {
+        VStack(spacing: 16) {
+            section("Запись") { recordingSettings }
+            divider
+            section("Текст") { textSettings }
+            divider
+            section("Общее") { generalSettings }
+        }
+    }
+
+    private var customization: some View {
+        VStack(spacing: 16) {
+            section("Островок") { islandSettings }
+            divider
+            section("Звуки") { soundSettings }
+        }
+    }
+
+    @ViewBuilder
+    private var islandSettings: some View {
+        Group {
+            row("Положение") {
+                Segmented(options: AppState.IslandStyle.allCases, selection: $state.islandStyle) {
+                    $0 == .bottom ? "Снизу" : "Из чёлки"
+                }
+            }
+            row("Реакция") {
+                Segmented(options: AppState.VisualSource.allCases, selection: $state.visualSource) {
+                    $0 == .spectrum ? "Спектр" : "Лента"
+                }
+            }
+            row("Вид") {
+                Segmented(options: AppState.VisualStyle.allCases, selection: $state.visualStyle) {
+                    switch $0 {
+                    case .bars: "Столбики"
+                    case .waves: "Волны"
+                    case .pixels: "Пиксели"
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var soundSettings: some View {
+        Group {
+            Toggle(isOn: $state.soundsEnabled) {
+                Text("Звуки записи и вставки").font(.system(size: 13))
+            }
+            .toggleStyle(CoralSwitchStyle())
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+                ForEach(SoundSet.allCases, id: \.self) { set in
+                    let isOn = set == state.soundSet
+                    Button {
+                        state.soundSet = set
+                        state.previewSounds(set)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(set.title).font(.system(size: 13, weight: .semibold))
+                            Text(set.note).font(.system(size: 11))
+                                .foregroundStyle(isOn ? Theme.textPrimary.opacity(0.85) : Theme.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(isOn ? Theme.accentSolid : Theme.track))
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(PressScaleStyle())
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                }
+            }
+            .opacity(state.soundsEnabled ? 1 : 0.5)
+        }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 12) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Theme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Theme.stroke).frame(height: 1)
+    }
+
+    @ViewBuilder
+    private var recordingSettings: some View {
+        Group {
             row("Клавиша") {
                 Segmented(options: AppState.Activation.allCases, selection: $state.activation) { activation in
                     activation == .combo ? "Сочетание" : state.title(for: activation)
@@ -152,11 +247,12 @@ struct MenuPanel: View {
                     $0 == .hold ? "Удерживать" : "Нажать-нажать"
                 }
             }
-            row("Островок") {
-                Segmented(options: AppState.IslandStyle.allCases, selection: $state.islandStyle) {
-                    $0 == .bottom ? "Снизу" : "Из чёлки"
-                }
-            }
+        }
+    }
+
+    @ViewBuilder
+    private var textSettings: some View {
+        Group {
             row("Язык") {
                 PillButton(title: state.languageName, systemImage: showLanguages ? "chevron.up" : "chevron.down") {
                     withAnimation(.ui(.easeOut(duration: 0.2), reduceMotion: reduceMotion)) { showLanguages.toggle() }
@@ -164,16 +260,18 @@ struct MenuPanel: View {
                 .accessibilityLabel("Язык: \(state.languageName)")
             }
             if showLanguages { languageGrid }
-            Toggle(isOn: Binding(get: { state.launchAtLogin }, set: { state.setLaunchAtLogin($0) })) {
-                Text("Запускать при входе").font(.system(size: 13))
-            }
-            .toggleStyle(CoralSwitchStyle())
             Toggle(isOn: $state.skipFinalPeriod) {
                 Text("Без точки в конце").font(.system(size: 13))
             }
             .toggleStyle(CoralSwitchStyle())
-            Toggle(isOn: $state.soundsEnabled) {
-                Text("Звуки записи и вставки").font(.system(size: 13))
+        }
+    }
+
+    @ViewBuilder
+    private var generalSettings: some View {
+        Group {
+            Toggle(isOn: Binding(get: { state.launchAtLogin }, set: { state.setLaunchAtLogin($0) })) {
+                Text("Запускать при входе").font(.system(size: 13))
             }
             .toggleStyle(CoralSwitchStyle())
         }

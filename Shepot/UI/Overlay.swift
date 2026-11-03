@@ -2,19 +2,108 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Recent input levels for the island bars.
+/// Live input for the island: voice bands and level, eased at 60 Hz while recording.
+/// The audio arrives at 10-40 Hz; a timer eases toward it and redraws (see `step`).
 @MainActor
 final class LevelMeter: ObservableObject {
     static let barCount = 11
-    @Published private(set) var levels = Array(repeating: Float(0), count: barCount)
+    private static let historyCount = 32
 
-    func push(_ level: Float) {
-        levels.removeFirst()
-        levels.append(level)
+    private var targetBands = Array(repeating: Float(0), count: Spectrum.bandCount)
+    private var targetLevel: Float = 0
+    private var bands = Array(repeating: Float(0), count: Spectrum.bandCount)
+    private var level: Float = 0
+    private var history = Array(repeating: Float(0), count: LevelMeter.historyCount) // oldest first
+    private var historyClock: Float = 0
+    private(set) var phase: Double = 0 // seconds, for animations that don't depend on the voice
+    private var lastStep: Date?
+    private var timer: Timer?
+
+    func push(_ newBands: [Float], level newLevel: Float) {
+        targetBands = newBands
+        targetLevel = newLevel
+    }
+
+    /// Per display frame: very quick rise, a bit slower fall, independent of the frame rate.
+    func step(_ now: Date) {
+        let dt = Float(min(now.timeIntervalSince(lastStep ?? now), 0.1))
+        lastStep = now
+        phase += Double(dt)
+        let rise = 1 - exp(-dt / 0.02), fall = 1 - exp(-dt / 0.09)
+        for i in bands.indices {
+            bands[i] += (targetBands[i] - bands[i]) * (targetBands[i] > bands[i] ? rise : fall)
+        }
+        level += (targetLevel - level) * (targetLevel > level ? rise : fall)
+        historyClock += dt
+        while historyClock >= 1.0 / 20 { // the "ribbon" scrolls at 20 steps per second
+            historyClock -= 1.0 / 20
+            history.removeFirst()
+            history.append(level)
+        }
+    }
+
+    func start() {
+        reset()
+        timer?.invalidate()
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.step(Date())
+                self?.objectWillChange.send()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
     }
 
     func reset() {
-        levels = Array(repeating: 0, count: Self.barCount)
+        targetBands = Array(repeating: 0, count: Spectrum.bandCount)
+        bands = targetBands
+        targetLevel = 0
+        level = 0
+        history = Array(repeating: 0, count: Self.historyCount)
+        phase = 0
+        lastStep = nil
+    }
+
+    // MARK: Values for the visualizers
+
+    /// `count` columns, mirrored around the middle.
+    /// Spectrum: lowest voice band in the middle, higher ones toward the edges.
+    /// Ribbon: the recent loudness history, newest at the right, stronger in the middle.
+    func values(count: Int, source: AppState.VisualSource) -> [Float] {
+        let mid = Double(count - 1) / 2
+        switch source {
+        case .spectrum:
+            return (0..<count).map { i in
+                let x = abs(Double(i) - mid) / max(mid, 1) * Double(bands.count - 1)
+                let lo = Int(x), hi = min(lo + 1, bands.count - 1)
+                return bands[lo] + (bands[hi] - bands[lo]) * Float(x - Double(lo))
+            }
+        case .ribbon:
+            let recent = Array(history.suffix(count))
+            return recent.enumerated().map { i, v in
+                v * Float(1 - abs(Double(i) - mid) / (mid + 1) * 0.6)
+            }
+        }
+    }
+
+    /// A few independent signals for layered shapes: voice bands, or the same loudness at different delays.
+    func signals(count: Int, source: AppState.VisualSource) -> [Float] {
+        switch source {
+        case .spectrum:
+            let groups = [[0], [1, 2], [3], [4, 5]]
+            return (0..<count).map { k in
+                let g = groups[min(k, groups.count - 1)]
+                return g.map { bands[$0] }.reduce(0, +) / Float(g.count)
+            }
+        case .ribbon:
+            return (0..<count).map { k in history[history.count - 1 - min(k * 4, history.count - 1)] }
+        }
     }
 }
 
@@ -232,6 +321,7 @@ final class OverlayController {
 struct OverlayView: View {
     @ObservedObject var meter: LevelMeter
     @ObservedObject var model: OverlayModel
+    @EnvironmentObject private var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let islandWidth: CGFloat = 380
@@ -313,7 +403,7 @@ struct OverlayView: View {
     private var waveContent: some View {
         ZStack {
             // Wave stays exactly centered; icon and title sit at the edges.
-            bars.frame(width: 110, height: 28)
+            bars
             HStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Theme.accent)
@@ -324,7 +414,7 @@ struct OverlayView: View {
                             .foregroundStyle(.white)
                     )
                 Spacer()
-                Text(model.mode == .transcribing ? "Распознаю…" : "Shepot")
+                Text(model.mode == .transcribing && reduceMotion ? "Распознаю…" : "Shepot")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
             }
@@ -336,30 +426,9 @@ struct OverlayView: View {
     private var bars: some View {
         switch model.mode {
         case .recording:
-            HStack(spacing: 5) {
-                ForEach(meter.levels.indices, id: \.self) { i in
-                    Capsule().fill(.white).frame(width: 5, height: barHeight(meter.levels[i], index: i))
-                }
-            }
-            .animation(.easeOut(duration: 0.12), value: meter.levels)
-        case .transcribing where reduceMotion:
-            // No moving wave; the "Распознаю…" label carries the state.
-            HStack(spacing: 5) {
-                ForEach(0..<LevelMeter.barCount, id: \.self) { _ in
-                    Capsule().fill(.white.opacity(0.6)).frame(width: 5, height: 10)
-                }
-            }
+            Visualizer(meter: meter, style: state.visualStyle, source: state.visualSource)
         case .transcribing:
-            // Calm wave while the model works.
-            TimelineView(.animation) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                HStack(spacing: 5) {
-                    ForEach(0..<LevelMeter.barCount, id: \.self) { i in
-                        let phase = (sin(t * 6 - Double(i) * 0.6) + 1) / 2
-                        Capsule().fill(.white.opacity(0.6)).frame(width: 5, height: 6 + 8 * phase)
-                    }
-                }
-            }
+            Spinner(meter: meter, animated: !reduceMotion)
         case .failed:
             EmptyView()
         case .idle:
@@ -369,13 +438,6 @@ struct OverlayView: View {
                 }
             }
         }
-    }
-
-    /// Middle bars react stronger, like a classic voice meter.
-    private func barHeight(_ level: Float, index: Int) -> CGFloat {
-        let center = Double(LevelMeter.barCount - 1) / 2
-        let weight = 1 - abs(Double(index) - center) / (center + 1) * 0.6
-        return 6 + 22 * CGFloat(Double(level) * weight)
     }
 }
 
