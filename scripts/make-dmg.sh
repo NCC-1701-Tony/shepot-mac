@@ -25,4 +25,6 @@ SetFile -a C "$STAGE" 2>/dev/null || true
 mkdir -p dist
 rm -f "$DMG"
 hdiutil create -volname "Shepot" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+# Plain zip of the app: what the in-app updater downloads.
+ditto -c -k --keepParent "$APP" "dist/Shepot-$VERSION.zip"
 echo "Готово: $DMG ($(du -h "$DMG" | cut -f1))"

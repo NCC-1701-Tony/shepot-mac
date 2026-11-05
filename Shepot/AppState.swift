@@ -112,6 +112,7 @@ final class AppState: ObservableObject {
     private let transcriber = Transcriber()
     private let hotKey = HotKey()
     private let modifierTrigger = ModifierTrigger()
+    let updater = Updater()
     private let meter = LevelMeter()
     private lazy var overlay = OverlayController(state: self, meter: meter)
     private var permissionTimer: Timer?

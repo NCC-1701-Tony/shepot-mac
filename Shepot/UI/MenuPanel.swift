@@ -277,6 +277,7 @@ struct MenuPanel: View {
                 Text("Запускать при входе").font(.system(size: 13))
             }
             .toggleStyle(CoralSwitchStyle())
+            UpdateRow(updater: state.updater)
         }
     }
 
