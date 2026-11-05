@@ -267,6 +267,18 @@ struct MenuPanel: View {
                 Text("Без точки в конце").font(.system(size: 13))
             }
             .toggleStyle(CoralSwitchStyle())
+            Toggle(isOn: $state.cleanSpeech) {
+                Text("Убирать слова-паразиты").font(.system(size: 13))
+            }
+            .toggleStyle(CoralSwitchStyle())
+            if state.cleanSpeech {
+                HStack {
+                    Text("Список слов и замен лежит в файле")
+                        .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    PillButton(title: "Открыть список") { Cleaner.openRulesFile() }
+                }
+            }
         }
     }
 

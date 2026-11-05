@@ -77,6 +77,9 @@ final class AppState: ObservableObject {
     @Published var soundsEnabled = UserDefaults.standard.object(forKey: Keys.sounds) as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundsEnabled, forKey: Keys.sounds) }
     }
+    @Published var cleanSpeech = UserDefaults.standard.bool(forKey: "cleanSpeech") {
+        didSet { UserDefaults.standard.set(cleanSpeech, forKey: "cleanSpeech") }
+    }
     @Published var soundSet = SoundSet(rawValue: AppState.storedSoundSet()) ?? .standard {
         didSet { UserDefaults.standard.set(soundSet.rawValue, forKey: Keys.soundSet) }
     }
@@ -399,7 +402,7 @@ final class AppState: ObservableObject {
         do {
             let lang = language == "auto" ? nil : language
             let raw = try await transcriber.transcribe(samples, model: selectedModel, language: lang)
-            let text = finalized(raw)
+            let text = finalized(cleanSpeech ? Cleaner.clean(raw) : raw)
             if text.isEmpty {
                 flashError("Ничего не распознано")
             } else {
